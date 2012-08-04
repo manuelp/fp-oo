@@ -4,6 +4,10 @@
   [instance]
   (eval (:__class_symbol__ instance)))
 
+(defn- method-from-message
+  [message class]
+  (message (:__instance_methods__ class)))
+
 ;; This class definition exposes an object as a map of instance
 ;; methods (or *handlers* for messages that can be sent to instances
 ;; of this class).
@@ -29,12 +33,25 @@
                     (send-to other :x) (send-to other :y)))
     }})
 
+(defn- has-instance-variable?
+  [instance variable]
+  (not (nil? (variable instance))))
+
 ;; Applying a method defined in the class to an instance with some
 ;; arguments can be abstracted by a generic function.
+;;
+;; If the class doesn't directly responds to the given message, before
+;; throwing and exception, search for an instance variable with the
+;; same name of the message: if it exists then returns the
+;; corresponding value, fails otherwise. In other words, automatically
+;; "generates" read accessors.
 (defn- apply-message-to
   [class instance message args]
-  (let [method (message (:__instance_methods__ class))]
-    (apply method instance args)))
+  (let [method (method-from-message message class)]
+    (or (and (nil? method)
+             (has-instance-variable? instance message)
+             (message instance))
+        (apply method instance args))))
 
 ;; Instance creation is done in three steps:
 ;;
