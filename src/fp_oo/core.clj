@@ -23,6 +23,13 @@
                     (send-to other :x) (send-to other :y)))
     }})
 
+;; Applying a method defined in the class to an instance with some
+;; arguments can be abstracted by a generic function.
+(defn- apply-message-to
+  [class instance message args]
+  (let [method (message (:__instance_methods__ class))]
+    (apply method instance args)))
+
 ;; Instance creation is done in three steps:
 ;;
 ;; 1. Allocate memory: `{}`
@@ -36,15 +43,14 @@
 ;; a function to instantiate Java's classes.
 (def a
   (fn [class & args]
-    (let [seeded {:__class_symbol__ (:__own_symbol__ class)}
-          constructor (:add-instance-values (:__instance_methods__ class))]
-      (apply constructor seeded args))))
+    (let [class-symbol (:__own_symbol__ class)
+          seeded {:__class_symbol__ class-symbol}]
+      (apply-message-to class seeded :add-instance-values args))))
 
 ;; The message dispatch function has to look up for the class
 ;; definition from an object instance of that class and call one of
 ;; his instance methods.
 (def send-to
   (fn [instance message & args]
-    (let [class (eval (:__class_symbol__ instance))
-          method (message (:__instance_methods__ class))]
-      (apply method instance args))))
+    (let [class (eval (:__class_symbol__ instance))]
+      (apply-message-to class instance message args))))
