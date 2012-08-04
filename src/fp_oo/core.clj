@@ -1,34 +1,6 @@
 (ns fp-oo.core)
 
-;; This is a simple constructor, but instance variables are not
-;; encapsulated:
-;;
-;;     (:x (Point 5 7)) ; -> 5
-;;
-;; However, we can load the resulting hash-map with all metadata we
-;; need (such as: class name).
-(def Point
-  (fn [x y]
-    {:x x
-     :y y
-     :__class_symbol__ 'Point}))
-
-;; However, for now we can pretend that we already have data-hiding
-;; and implement some *accessor methods*:
-(def x :x)
-(def y :y)
-(def class :__class_symbol__)
-
-(def shift
-  (fn [this xinc yinc]
-    (Point (+ (x this) xinc)
-           (+ (y this) yinc))))
-
-(def add
-  (fn [this other]
-    (shift this (x other) (y other))))
-
-;; Support for creation a-la Java:
+;; Support for creation of instances a-la Java:
 ;;
 ;;     (new Point 3 5)
 ;;
@@ -37,6 +9,32 @@
   (fn [class & args]
     (apply class args)))
 
+;; Function for message dispatching.
+(def send-to
+  (fn [object message & args]
+    (apply (message (:__methods__ object)) object args)))
+
+;; A class definition with instance variables (for now not
+;; encapsulated) and methods.
+;;
+;; Equality in this type of object can be obtained for free using `=`.
+(def Point
+  (fn [x y]
+    {:x x
+     :y y
+     :__class_symbol__ 'Point
+     :__methods__ {
+                   :class :__class_symbol__
+                   :x :x
+                   :y :y
+                   :shift (fn [this xinc yinc]
+                            (a Point
+                               (+ (:x this) xinc)
+                               (+ (:y this) yinc)))
+                   :add (fn [this other]
+                          (send-to this :shift
+                                   (send-to other :x) (send-to other :y)))}}))
+
 ;; Let's define a `Triangle` class to test the `a` operator with more
 ;; than 2 arguments.
 (def Triangle
@@ -44,7 +42,12 @@
     {:x x
      :y y
      :z z
-     :__class_symbol__ 'Triangle}))
+     :__class_symbol__ 'Triangle
+     :__methods__ {
+                   :class :__class_symbol__
+                   :x :x
+                   :y :y
+                   :z :z}}))
 
 (def right-triangle (a Triangle (a Point 1 1) (a Point 1 2) (a Point 2 1)))
 (def equal-right-triangle (a Triangle (a Point 1 1) (a Point 1 2) (a Point 2 1)))
