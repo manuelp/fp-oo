@@ -1,62 +1,50 @@
 (ns fp-oo.core)
 
-;; Support for creation of instances a-la Java:
+;; This class definition exposes an object as a map of instance
+;; methods (or *handlers* for messages that can be sent to instances
+;; of this class).
+;; 
+;; One special method is `add-instance-values`, and is used when
+;; instantiating an object to populate its instance variables (like
+;; Ruby's `initialize` method).
+(def Point
+  {
+   :__own_symbol__ 'Point
+   :__instance_methods__
+   {
+    :add-instance-values (fn [this x y]
+                           (assoc this :x x :y y))
+    :shift (fn [this xinc yinc]
+             (a Point
+                (+ (:x this) xinc)
+                (+ (:y this) yinc)))
+    :add (fn [this other]
+           (send-to this :shift
+                    (send-to other :x) (send-to other :y)))
+    }})
+
+;; Instance creation is done in three steps:
 ;;
-;;     (new Point 3 5)
+;; 1. Allocate memory: `{}`
+;; 2. Seed memory with metadata needed by the language runtime (in
+;;    this case, the object system).
+;; 3. A particular instance method is called to fill in the starting
+;;    values of the new instance.
 ;;
-;; But since `new` is reserverd for java interop, we'll use `a`:
+;; The function that does the instantiation is generic and follows
+;; this three steps. It's named `a` to differentiate from `new` that is
+;; a function to instantiate Java's classes.
 (def a
   (fn [class & args]
-    (apply class args)))
+    (let [seeded {:__class_symbol__ (:__own_symbol__ class)}
+          constructor (:add-instance-values (:__instance_methods__ class))]
+      (apply constructor seeded args))))
 
-;; Function for message dispatching.
+;; The message dispatch function has to look up for the class
+;; definition from an object instance of that class and call one of
+;; his instance methods.
 (def send-to
-  (fn [object message & args]
-    (apply (message (:__methods__ object)) object args)))
-
-;; A class definition with instance variables (for now not
-;; encapsulated) and methods.
-;;
-;; Equality in this type of object can be obtained for free using `=`.
-(def Point
-  (fn [x y]
-    {:x x
-     :y y
-     :__class_symbol__ 'Point
-     :__methods__ {
-                   :class :__class_symbol__
-                   :x :x
-                   :y :y
-                   :shift (fn [this xinc yinc]
-                            (a Point
-                               (+ (:x this) xinc)
-                               (+ (:y this) yinc)))
-                   :add (fn [this other]
-                          (send-to this :shift
-                                   (send-to other :x) (send-to other :y)))}}))
-
-;; Let's define a `Triangle` class to test the `a` operator with more
-;; than 2 arguments.
-(def Triangle
-  (fn [x y z]
-    {:x x
-     :y y
-     :z z
-     :__class_symbol__ 'Triangle
-     :__methods__ {
-                   :class :__class_symbol__
-                   :x :x
-                   :y :y
-                   :z :z}}))
-
-(def right-triangle (a Triangle (a Point 1 1) (a Point 1 2) (a Point 2 1)))
-(def equal-right-triangle (a Triangle (a Point 1 1) (a Point 1 2) (a Point 2 1)))
-(def different-triangle (a Triangle (a Point 3 3) (a Point 3 4) (a Point 4 3)))
-
-;; Equality is very easy with this kind of object system. It's even
-;; independent from classes!
-(def equal-triangles? =)
-
-(def valid-triangle?
-  (fn [& points]
-    (= 3 (count (distinct points)))))
+  (fn [instance message & args]
+    (let [class (eval (:__class_symbol__ instance))
+          method (message (:__instance_methods__ class))]
+      (apply method instance args))))
