@@ -1,5 +1,9 @@
 (ns fp-oo.core)
 
+(defn- class-from-instance
+  [instance]
+  (eval (:__class_symbol__ instance)))
+
 ;; This class definition exposes an object as a map of instance
 ;; methods (or *handlers* for messages that can be sent to instances
 ;; of this class).
@@ -14,6 +18,8 @@
    {
     :add-instance-values (fn [this x y]
                            (assoc this :x x :y y))
+    :class-name :__class_symbol__
+    :class #(class-from-instance %)
     :shift (fn [this xinc yinc]
              (a Point
                 (+ (:x this) xinc)
@@ -52,5 +58,5 @@
 ;; his instance methods.
 (def send-to
   (fn [instance message & args]
-    (let [class (eval (:__class_symbol__ instance))]
+    (let [class (class-from-instance instance)]
       (apply-message-to class instance message args))))
