@@ -50,10 +50,10 @@
 (defn- apply-message-to
   [class instance message args]
   (let [method (message (method-cache class))]
-    (or (and (nil? method)
-             (has-instance-variable? instance message)
-             (message instance))
-        (apply method instance args))))
+    (cond (and (nil? method)
+               (has-instance-variable? instance message)) (message instance)
+          (nil? method) (apply-message-to class instance :method-missing [message args])
+          :default (apply method instance args))))
 
 ;; Instance creation is done in three steps:
 ;;
@@ -80,6 +80,21 @@
     (let [class (class-from-instance instance)]
       (apply-message-to class instance message args))))
 
+;; This function is useful for implementing `send-super`.
+(defn- superclass-from-instance
+  "Returns the superclass."
+  [instance]
+  (let [class (class-from-instance instance)]
+    (eval (class-symbol-above class))))
+
+(defn- send-super
+  "Send a message to the superclass of the given instance."
+  [instance message & args]
+  (apply-message-to (superclass-from-instance instance)
+                    instance
+                    message
+                    args))
+
 (def Anything
   {
    :__own_symbol__ 'Anything
@@ -87,9 +102,16 @@
    {
     ;; Default constructor
     :add-instance-values identity
+
+    :method-missing (fn [this message args]
+                      (let [error-msg (str "A " (send-to this :class-name)
+                                           " does not accept the message " message)]
+                        (throw (RuntimeException. error-msg))))
     
     :class-name :__class_symbol__
-    :class #(class-from-instance %)}})
+    :class #(class-from-instance %)
+    :to-string #(str %)
+    }})
 
 ;; This class definition exposes an object as a map of instance
 ;; methods (or *handlers* for messages that can be sent to instances
@@ -106,6 +128,7 @@
    {
     :add-instance-values (fn [this x y]
                            (assoc this :x x :y y))
+    :to-string #(str "A point like this: " (send-super % :to-string))
     :shift (fn [this xinc yinc]
              (a Point
                 (+ (:x this) xinc)
