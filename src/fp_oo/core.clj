@@ -83,9 +83,21 @@
 ;; method* as instance methods. For example we can put instantiation
 ;; methods, additional constructors and singletons in these type of
 ;; classes.
+
+;; MetaAnything is an instance of Anything (so that it can respond to, for
+;; example, a :missing-method message). But at the same time, Anything
+;; is an instance of MetaAnything.
+;;
+;; And, every derived class of MetaAnything is an instance of Anything
+;; (for the same reason).
+;;
+;; My brain hurts :) 
+
 (def MetaAnything
   {
    :__own_symbol__ 'MetaAnything
+   :__class_symbol__ 'Anything
+   :__superclass_symbol__ 'Anything ;; To inherit its instance methods (for example :method-missing)
    :__instance_methods__
    {
     ;; Instance creation is done in three steps:
@@ -126,6 +138,7 @@
 (def MetaPoint
   {
    :__own_symbol__ 'MetaPoint
+   :__class_symbol__ 'Anything
    :__superclass_symbol__ 'MetaAnything
    :__instance_methods__
    {
