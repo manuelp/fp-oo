@@ -1,11 +1,12 @@
 (ns fp-oo.core)
 
 (defn- class-from-instance
-  "Returns the class from an instance."
+  "Returns the class symbol from an instance."
   [instance]
   (eval (:__class_symbol__ instance)))
 
 (defn- has-instance-variable?
+  "Looks up if the given instance (represented as a map), has a particular symbol as key."
   [instance variable]
   (not (nil? (variable instance))))
 
@@ -20,7 +21,7 @@
   (:__superclass_symbol__ (eval class-symbol)))
 
 (defn- lineage
-  "Compiles a seq of symbols for the entire class hierarchy lineage, rooted in `Anything`."
+  "Compiles a seq of symbols for the entire class hierarchy lineage rooted in `Anything`."
   [class-symbol]
   (loop [line (seq [class-symbol])
          above-sym (class-symbol-above class-symbol)]
@@ -55,23 +56,6 @@
           (nil? method) (apply-message-to class instance :method-missing [message args])
           :default (apply method instance args))))
 
-;; Instance creation is done in three steps:
-;;
-;; 1. Allocate memory: `{}`
-;; 2. Seed memory with metadata needed by the language runtime (in
-;;    this case, the object system).
-;; 3. A particular instance method is called to fill in the starting
-;;    values of the new instance.
-;;
-;; The function that does the instantiation is generic and follows
-;; this three steps. It's named `a` to differentiate from `new` that is
-;; a function to instantiate Java's classes.
-(def a
-  (fn [class & args]
-    (let [class-symbol (:__own_symbol__ class)
-          seeded {:__class_symbol__ class-symbol}]
-      (apply-message-to class seeded :add-instance-values args))))
-
 ;; The message dispatch function has to look up for the class
 ;; definition from an object instance of that class and call one of
 ;; his instance methods.
@@ -95,9 +79,35 @@
                     message
                     args))
 
+;; The Meta\* "things" are *metaobjects*, and they can have *class
+;; method* as instance methods. For example we can put instantiation
+;; methods, additional constructors and singletons in these type of
+;; classes.
+(def MetaAnything
+  {
+   :__own_symbol__ 'MetaAnything
+   :__instance_methods__
+   {
+    ;; Instance creation is done in three steps:
+    ;;
+    ;; 1. Allocate memory: `{}`
+    ;; 2. Seed memory with metadata needed by the language runtime (in
+    ;;    this case, the object system).
+    ;; 3. A particular instance method is called to fill in the starting
+    ;;    values of the new instance.
+    ;;
+    ;; The function that does the instantiation is generic and follows
+    ;; this three steps. 
+    :new (fn [class & args]
+           (let [class-symbol (:__own_symbol__ class)
+                 seeded {:__class_symbol__ class-symbol}]
+             (apply-message-to class seeded :add-instance-values args)))
+    }})
+
 (def Anything
   {
    :__own_symbol__ 'Anything
+   :__class_symbol__ 'MetaAnything
    :__instance_methods__
    {
     ;; Default constructor
@@ -113,6 +123,19 @@
     :to-string #(str %)
     }})
 
+(def MetaPoint
+  {
+   :__own_symbol__ 'MetaPoint
+   :__superclass_symbol__ 'MetaAnything
+   :__instance_methods__
+   {
+    ;; Constructor that instantiates a new Point object with [0 0]
+    ;; args. The `:new` message propagates to the `MetaAnything`
+    ;; class.
+    :origin (fn [class]
+              (send-to class :new 0 0))
+    }})
+
 ;; This class definition exposes an object as a map of instance
 ;; methods (or *handlers* for messages that can be sent to instances
 ;; of this class).
@@ -123,6 +146,7 @@
 (def Point
   {
    :__own_symbol__ 'Point
+   :__class_symbol__ 'MetaPoint
    :__superclass_symbol__ 'Anything
    :__instance_methods__
    {
